@@ -493,6 +493,9 @@ const Dialogs = {
       id: Core.uid('l'), subjectId: D.subjects.length === 1 ? D.subjects[0].id : '', teacherIds: [], autoTeacher: false, classIds: [], groups: {},
       count: 1, duration: 1, homeRoom: true, sharedRoom: false, roomIds: []
     }, JSON.parse(JSON.stringify(preset || {})));
+    // Com mais de uma turma marcada: false = uma aula separada para cada turma; true = turmas reunidas na mesma aula.
+    let joined = !!lesson && w.classIds.length > 1;
+    let classScroll = 0;
     const body = h('div', { class: 'lesson-form' });
     const section = (icon, kids, side) => h('div', { class: 'ls' }, h('div', { class: 'ico' }, icon), h('div', { class: 'ls-main' }, kids), h('div', { class: 'ls-side' }, side || null));
     const names = (ids, list) => ids.map(id => (Core.find(list, id) || {}).name).filter(Boolean).join(', ');
@@ -521,27 +524,35 @@ const Dialogs = {
           if (!lesson && s && (s.roomIds || []).length && !w.roomIds.length) { w.roomIds = s.roomIds.slice(); w.homeRoom = false; }
           draw();
         })]));
+      const setClasses = ids => {
+        w.classIds = D.classes.map(c => c.id).filter(id => ids.indexOf(id) >= 0); // mantém a ordem do cadastro
+        if (w.classIds.length !== 1 || !w.groups[w.classIds[0]]) w.groups = {};
+        draw();
+      };
+      const classList = h('div', { class: 'checklist classes', onscroll: e => { classScroll = e.target.scrollTop; } },
+        D.classes.length ? D.classes.map(c => UI.check(c.name, w.classIds.indexOf(c.id) >= 0, v => setClasses(v ? w.classIds.concat(c.id) : w.classIds.filter(x => x !== c.id))))
+          : h('span', { class: 'hint' }, 'Nenhuma turma cadastrada.'));
+      const mode = (label, hint, value) => h('label', { class: 'check' }, h('input', { type: 'radio', name: 'lesson-classes', checked: joined === value, onchange: () => { joined = value; draw(); } }), h('span', null, label, h('small', null, hint)));
       body.appendChild(section('👥', [
-        h('div', { class: 'field-label' }, 'Turma'),
-        h('div', { class: 'row' },
-          UI.select([{ value: '', label: 'Sem turma' }].concat(D.classes.map(c => ({ value: c.id, label: c.name })), w.classIds.length > 1 ? [{ value: '__multi', label: 'Turmas reunidas (' + w.classIds.length + ')' }] : []),
-            w.classIds.length > 1 ? '__multi' : (w.classIds[0] || ''), v => { if (v === '__multi') return; w.classIds = v ? [v] : []; w.groups = {}; draw(); }),
-          h('select', { disabled: !cls, onchange: e => { if (e.target.value) w.groups[cls.id] = e.target.value; else delete w.groups[cls.id]; } },
-            groupOpts.map(o => h('option', { value: o.value, selected: cls && (w.groups[cls.id] || '') === o.value }, o.label)))),
-        w.classIds.length > 1 ? h('div', { class: 'hint' }, 'Turmas: ' + names(w.classIds, D.classes)) : null
+        h('div', { class: 'field-label' }, 'Turma', h('span', { class: 'hint' }, w.classIds.length ? '  ' + w.classIds.length + ' selecionada(s)' : '  nenhuma (aula sem turma)')),
+        classList,
+        w.classIds.length > 1 ? h('div', { class: 'modes' },
+          mode('Uma aula para cada turma', 'Cria ' + w.classIds.length + ' aulas iguais, uma por turma (' + w.count + ' aula(s)/semana em cada).', false),
+          mode('Turmas reunidas', 'Uma única aula em que as ' + w.classIds.length + ' turmas ficam juntas, no mesmo horário.', true)) : null,
+        cls ? h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Parte da turma:'),
+          h('select', { onchange: e => { if (e.target.value) w.groups[cls.id] = e.target.value; else delete w.groups[cls.id]; } },
+            groupOpts.map(o => h('option', { value: o.value, selected: (w.groups[cls.id] || '') === o.value }, o.label)))) : null
       ], [
-        h('button', { class: 'btn', onclick: async () => {
-          const r = await UI.pickMany('Turmas reunidas', D.classes.map(c => ({ id: c.id, label: c.name })), w.classIds);
-          if (r) { w.classIds = r; if (r.length !== 1) w.groups = {}; draw(); }
-        } }, 'Turmas reunidas'),
+        h('button', { class: 'btn', disabled: !D.classes.length, onclick: () => setClasses(w.classIds.length === D.classes.length ? [] : D.classes.map(c => c.id)) }, w.classIds.length === D.classes.length && D.classes.length ? 'Desmarcar todas' : 'Marcar todas'),
         h('button', { class: 'btn', disabled: !cls, onclick: () => Dialogs.divisions(cls, draw) }, 'Adicionar divisão')]));
+      classList.scrollTop = classScroll;
       body.appendChild(section('🔴', [
         h('div', { class: 'field-label' }, 'Aulas/semana'),
         h('div', { class: 'row' },
-          h('input', { type: 'number', class: 'num', min: 1, max: 60, value: w.count, oninput: e => { w.count = Math.max(1, Math.min(60, +e.target.value || 1)); } }),
+          h('input', { type: 'number', class: 'num', min: 1, max: 60, value: w.count, oninput: e => { w.count = Math.max(1, Math.min(60, +e.target.value || 1)); }, onchange: () => { if (w.classIds.length > 1) draw(); } }),
           UI.select([1, 2, 3, 4, 5, 6, 7, 8].map(n => ({ value: n, label: Core.DURATION_NAMES[n] || String(n) })), w.duration, v => { w.duration = +v; }))]));
       body.appendChild(section('🏠', [
-        UI.check('Sala fixa' + (home ? ' — ' + home : (w.classIds.length ? ' (a turma ainda não tem sala fixa)' : '')), w.homeRoom, v => { w.homeRoom = v; }),
+        UI.check('Sala fixa' + (w.classIds.length > 1 && !joined ? ' (a de cada turma)' : home ? ' — ' + home : (w.classIds.length ? ' (a turma ainda não tem sala fixa)' : '')), w.homeRoom, v => { w.homeRoom = v; }),
         UI.check('Sala compartilhada (pode usar qualquer sala marcada como compartilhada)', w.sharedRoom, v => { w.sharedRoom = v; }),
         h('div', { class: 'row' }, h('button', { class: 'btn wide', onclick: async () => {
           const r = await UI.pickMany('Outras salas disponíveis', D.rooms.map(x => ({ id: x.id, label: x.name })), w.roomIds);
@@ -557,8 +568,14 @@ const Dialogs = {
           if (!w.subjectId) { UI.toast('Escolha a disciplina.', 'bad'); return; }
           if (!w.classIds.length && !w.teacherIds.length && !w.autoTeacher) { UI.toast('Escolha a turma ou o professor.', 'bad'); return; }
           if (w.duration > Core.periodList(D.school).length) { UI.toast('Duração maior que o número de aulas do dia.', 'bad'); return; }
-          if (lesson) { Object.keys(lesson).forEach(k => delete lesson[k]); Object.assign(lesson, w); result = lesson; }
-          else { D.lessons.push(w); result = w; }
+          // várias turmas, não reunidas: uma aula por turma (ao editar, a aula original fica com a primeira)
+          const parts = w.classIds.length > 1 && !joined
+            ? w.classIds.map((c, i) => Object.assign(JSON.parse(JSON.stringify(w)), { id: i ? Core.uid('l') : w.id, classIds: [c], groups: {} })) : [w];
+          if (lesson) { Object.keys(lesson).forEach(k => delete lesson[k]); Object.assign(lesson, parts[0]); result = lesson; }
+          else { D.lessons.push(parts[0]); result = parts[0]; }
+          const at = D.lessons.indexOf(result);
+          D.lessons.splice.apply(D.lessons, [at + 1, 0].concat(parts.slice(1)));
+          if (parts.length > 1) UI.toast(parts.length + ' aulas ' + (lesson ? 'gravadas' : 'criadas') + ', uma para cada turma.');
           m.close();
         } }]
       });
