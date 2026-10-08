@@ -1,14 +1,14 @@
-/* Casos reais transcritos das imagens em asc/exemplos, usados para validar o gerador.
+/* Casos reais (horários de uma escola) transcritos à mão, usados para validar o gerador.
    Cada linha é um professor; 'x' = indisponível, '.' = livre, demais = turma que ele atende naquele tempo.
-   Caso 1: 1.png (só a visão dos professores; cada cor é uma disciplina).
-   Caso 2: "HORÁRIO PROFESSORES.png" + "HORÁRIO GERAL.png" (a visão das turmas dá a disciplina de cada aula). */
+   Caso 1: só a visão dos professores (cada cor é uma disciplina).
+   Caso 2: visão dos professores + visão das turmas, que dá a disciplina de cada aula. */
 (function (root) {
   'use strict';
   const Core = root.Core || require('./core.js');
 
   const CASES = {
     1: {
-      name: 'Caso real 1 (asc/exemplos/1.png)',
+      name: 'Caso real 1',
       // [abreviatura, cor, Segunda | Terça | Quarta | Quinta | Sexta, disciplina]
       teachers: [
         ['A1', '#ff0000', '6C 6A 6C 6D 6B | x x x x x | 6D 6B 6A 6C 6B | 6D 6A 6D 6B 6C | 6D 6C 6B 6A 6A', 'D01'],

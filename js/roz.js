@@ -1,5 +1,6 @@
 /* Importação de arquivos .roz do aSc TimeTables (testado com arquivos da versão 2023).
-   O formato é binário e não documentado; o que está aqui foi obtido por engenharia reversa:
+   O formato é binário e não documentado; o que está aqui foi deduzido só da inspeção de arquivos de horário do
+   próprio autor (interoperabilidade), sem código, documentação nem descompilação do programa:
 
    - Todo registro (disciplina, professor, grupo, turma, aula…) tem o cabeçalho
        [R G B] 02 00 00 00 02 00 00 00 | 02 00 01 00 | id (8 bytes) | 00×7 | 02 | nome | abreviatura

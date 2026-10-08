@@ -1,6 +1,7 @@
 # Horários
 
-Sistema web de criação de horários escolares (inspirado no aSc Horários): aloca professor + disciplina por turma e sala.
+Sistema web de criação de horários escolares (inspirado no aSc Horários; veja [Relação com o aSc](#relação-com-o-asc)):
+aloca professor + disciplina por turma e sala.
 Roda 100% no navegador, sem backend — basta abrir `index.html`.
 
 ## Uso
@@ -15,7 +16,7 @@ Roda 100% no navegador, sem backend — basta abrir `index.html`.
 **Abrir** lê os `.json` salvos aqui e também importa arquivos `.roz` do aSc TimeTables (cadastros, tempo livre
 dos professores, aulas e o horário; salas e demais restrições não são importadas).
 
-Tudo o que é digitado fica salvo no `localStorage` do navegador. **Exemplo** carrega os casos reais de `asc/exemplos`.
+Tudo o que é digitado fica salvo no `localStorage` do navegador. **Exemplo** carrega os casos reais transcritos em `js/exemplo.js`.
 
 ## Como o horário é resolvido
 
@@ -37,7 +38,7 @@ método alternativo).
 ou, com Node instalado:
 
     npm install
-    npm test          # suíte baseada nos exemplos reais de asc/exemplos
+    npm test          # suíte baseada nos exemplos reais (js/exemplo.js e asc/exemplos/*.roz)
     npm run build     # roda os testes e gera public/ (HTML, CSS e JS minificados)
 
 `public/` é autocontida: publique a pasta em qualquer hospedagem de arquivos estáticos (ou abra `public/index.html`).
@@ -81,3 +82,33 @@ recarregue:
 Ao alterar `nginx/horarios.conf` no repositório, repita a cópia e o reload. Para conferir sem passar pelo Cloudflare:
 
     curl -skI --resolve leonardosampaio.dev:443:127.0.0.1 https://leonardosampaio.dev/horarios/
+
+## Relação com o aSc
+
+Este projeto é uma implementação independente (*clean-room*), apenas **inspirada** no aSc Horários / aSc TimeTables.
+Não é cópia nem derivação do programa:
+
+- nenhum código-fonte, binário, ícone, imagem, texto de ajuda ou outro recurso do aSc foi usado ou está neste
+  repositório; nada foi descompilado nem extraído do programa;
+- o que se aproveitou foi a ideia geral do fluxo de trabalho e o vocabulário corrente da área (turma, cartão, tempo
+  livre, janela…), observados no uso normal do programa. A interface, o modelo de dados e o resolvedor (programação
+  linear inteira com o HiGHS) foram escritos do zero;
+- a importação de `.roz` (`js/roz.js`) existe só para interoperabilidade: foi escrita a partir da análise de arquivos
+  de horário do próprio autor, sem documentação nem código do fabricante, e lê apenas os dados que o usuário
+  cadastrou;
+- os exemplos são horários de uma escola real, transcritos à mão em `js/exemplo.js`. As capturas de tela usadas
+  como referência durante o desenvolvimento não fazem parte do repositório.
+
+"aSc", "aSc Horários" e "aSc TimeTables" são marcas de seus respectivos titulares. Este projeto não tem vínculo,
+patrocínio ou endosso do fabricante.
+
+## Licença
+
+[MIT](LICENSE) © 2026 Leonardo Sampaio.
+
+Componentes de terceiros distribuídos em `vendor/`, cada um com a sua licença (também MIT):
+
+| Componente | Licença |
+|---|---|
+| [HiGHS](https://highs.dev) e [highs-js](https://github.com/lovasoa/highs-js) (WebAssembly) | `vendor/LICENSE-highs` |
+| [jsPDF](https://github.com/parallax/jsPDF) | `vendor/LICENSE-jspdf` |

@@ -1,4 +1,4 @@
-// As transcrições dos horários reais (asc/exemplos/*.png) têm de ser coerentes: são a base dos demais testes.
+// As transcrições dos horários reais têm de ser coerentes: são a base dos demais testes.
 const test = require('node:test'), assert = require('node:assert/strict');
 const { Core, Solver, errors, warnings, placed } = require('./helpers.js');
 

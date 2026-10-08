@@ -1,6 +1,8 @@
 {
   "name": "horarios",
   "private": true,
+  "license": "MIT",
+  "author": "Leonardo Sampaio",
   "description": "Criação de horários escolares no navegador",
   "scripts": {
     "test": "node --test tests/*.test.js",

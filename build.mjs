@@ -31,6 +31,7 @@ await writeFile(`${OUT}/js/app.min.js`, app);
 await writeFile(`${OUT}/js/milp-worker.js`, worker); // mesmo caminho que app.js usa em new Worker(...)
 await writeFile(`${OUT}/css/style.css`, css);
 await Promise.all(VENDOR.map(f => cp(`vendor/${f}`, `${OUT}/vendor/${f}`)));
+await cp('LICENSE', `${OUT}/LICENSE`);
 
 // index.html: troca os scripts da aplicação pelo pacote único e acrescenta hash para invalidar cache
 let html = await read('index.html');

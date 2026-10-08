@@ -1,2 +1,6 @@
 node_modules/
 public
+# capturas de tela e vídeo do aSc: material de referência local, não distribuído
+asc/*.png
+asc/*.mp4
+asc/exemplos/*.png

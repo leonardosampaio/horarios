@@ -1,6 +1,7 @@
 # Horários
 
-Aplicação web de criação de horários escolares (clone funcional do aSc Horários/TimeTables): aloca professor +
+Aplicação web de criação de horários escolares (implementação independente, inspirada no aSc Horários/TimeTables;
+licença MIT): aloca professor +
 disciplina por turma e sala, gera versões do horário obedecendo às restrições e valida escolhas manuais.
 
 ## Regras do projeto
@@ -21,7 +22,7 @@ disciplina por turma e sala, gera versões do horário obedecendo às restriçõ
 | Arquivo | Papel |
 |---|---|
 | `core.js` | Modelo do documento: `newDoc`, `normalize`, `syncCards` (cartões ↔ aulas), salas candidatas, exemplos. Roda também no Node. |
-| `exemplo.js` | Casos reais transcritos de `asc/exemplos/*.png` (`Core.realDoc(n, placed)`). |
+| `exemplo.js` | Casos reais (horários de uma escola) transcritos à mão (`Core.realDoc(n, placed)`). |
 | `solver.js` | `buildModel` (ocupação, `conflictsFor`, `inspect`, custos), `test`, `verify`, `generate` (busca construtiva + recozimento), `autoAssignTeachers`. Roda no Node. |
 | `milp.js` | Formulação PLI em formato LP + chamada ao HiGHS (`Milp.solve`). Roda no Node. |
 | `milp-worker.js` | Web Worker do PLI (usado só em http/https; em `file://` roda na thread principal). |
@@ -33,7 +34,10 @@ disciplina por turma e sala, gera versões do horário obedecendo às restriçõ
 | `pdf.js` | Exportação em PDF. |
 | `app.js` | Barra de ferramentas, assistente, teste/criação/verificação, versões, impressão, arquivos. |
 
-`vendor/`: HiGHS (WASM) e jsPDF. `asc/`: material de referência do usuário (screenshots, vídeo, exemplos) — não alterar.
+`vendor/`: HiGHS (WASM) e jsPDF, com as licenças (MIT). `asc/`: material de referência do usuário — não alterar. Só
+`asc/exemplos/*.roz` (dados do próprio usuário, usados nos testes) vai para o git; as capturas de tela e o vídeo do aSc
+ficam apenas no disco (`.gitignore`) e não podem ser distribuídos, nem nada extraído do programa (ver "Relação com o
+aSc" no `README.md`).
 
 ## Modelo de dados (resumo)
 

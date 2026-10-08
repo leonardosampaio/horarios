@@ -97,11 +97,11 @@ const App = {
     UI.modal({
       title: 'Exemplos', width: 560, noFocus: true,
       body: h('div', { class: 'choices' },
-        opt('Caso real 2 — para gerar', '17 professores, turmas 6A–6C e 7A–7D, 10 disciplinas com nome (asc/exemplos/HORÁRIO GERAL e PROFESSORES).',
+        opt('Caso real 2 — para gerar', '17 professores, turmas 6A–6C e 7A–7D, 10 disciplinas com nome.',
           () => load(Core.realDoc(2, false), 'Caso real 2 carregado. Clique em "Criar novo" para gerar o horário.')),
         opt('Caso real 2 — com o horário das imagens', 'Os mesmos dados, com os cartões colocados como nas imagens, para comparar com as versões geradas.',
           () => load(Core.realDoc(2, true), 'Caso real 2 carregado com o horário das imagens.')),
-        opt('Caso real 1 — para gerar', '16 professores, turmas 6A–6F e 7A–7C, grade cheia de 225 aulas (asc/exemplos/1.png).',
+        opt('Caso real 1 — para gerar', '16 professores, turmas 6A–6F e 7A–7C, grade cheia de 225 aulas.',
           () => load(Core.realDoc(1, false), 'Caso real 1 carregado. Clique em "Criar novo" para gerar o horário.')),
         opt('Caso real 1 — com o horário da imagem', 'Os mesmos dados, com os cartões colocados como na imagem.',
           () => load(Core.realDoc(1, true), 'Caso real 1 carregado com o horário da imagem.')),
