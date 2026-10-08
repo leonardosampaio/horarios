@@ -161,6 +161,11 @@ legend { padding: 0 5px; color: #445; }
 .ent-main .table-wrap { flex: 1; }
 .grid-table { border-collapse: collapse; width: 100%; }
 .grid-table th { position: sticky; top: 0; background: #edf1f6; text-align: left; font-weight: 400; padding: 4px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 1; }
+.grid-table th.sortable { cursor: pointer; user-select: none; }
+.grid-table th.sortable:hover { background: #dfe7f1; }
+.grid-table th.sorted { font-weight: 600; }
+.sort-mark { margin-left: 5px; font-size: 10px; color: var(--muted); }
+.grid-table th.sorted .sort-mark { color: var(--accent); }
 .grid-table td { padding: 3px 8px; white-space: nowrap; cursor: default; }
 .grid-table td.num { text-align: right; }
 .grid-table tr.sel td { background: var(--accent); color: #fff; }

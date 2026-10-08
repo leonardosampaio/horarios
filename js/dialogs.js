@@ -29,6 +29,8 @@ const Fmt = {
     }).join(' + ');
   },
   rooms(l) { return Core.candidateRoomIds(Store.data, l).map(id => Core.find(Store.data.rooms, id).name).join(', ') || '—'; },
+  /* Comparação para ordenar listagens: números por valor; texto em pt-BR, sem diferenciar maiúsculas e com "6º A" < "10º A". */
+  cmp(a, b) { return typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'pt-BR', { numeric: true, sensitivity: 'base' }); },
   duration(n) { return Core.DURATION_NAMES[n] || n + ' tempos'; },
   color(l) {
     const t = Core.find(Store.data.teachers, l.teacherIds[0]), s = Core.find(Store.data.subjects, l.subjectId);
@@ -139,8 +141,9 @@ const Dialogs = {
     const cols = [
       { label: 'Nome', cell: e => h('span', null, e.color ? h('i', { class: 'swatch', style: 'background:' + e.color }) : null, e.name) },
       { label: 'Abrev.', cell: e => e.abbr },
-      { label: 'Quant.', cls: 'num', cell: e => String(Core.periodsOf(D, type, e.id)) },
-      { label: 'Tempo livre', cell: e => Dialogs.miniTimeOff(e) }
+      { label: 'Quant.', cls: 'num', cell: e => String(Core.periodsOf(D, type, e.id)), key: e => Core.periodsOf(D, type, e.id) },
+      // ordena pelo número de posições indisponíveis (inadequadas pesam mais que condicionais)
+      { label: 'Tempo livre', cell: e => Dialogs.miniTimeOff(e), key: e => Object.keys(e.timeOff || {}).reduce((n, k) => n + (e.timeOff[k] === 2 ? 100 : 1), 0) }
     ];
     if (type === 'subjects') cols.push({ label: 'Máx./dia', cell: e => e.maxPerDay != null ? String(e.maxPerDay) : '' },
       { label: 'Salas da disciplina', cell: e => (e.roomIds || []).map(id => (Core.find(D.rooms, id) || {}).name).filter(Boolean).join(', ') });
@@ -158,6 +161,7 @@ const Dialogs = {
   entityPanel(type, opts) {
     opts = opts || {};
     let sel = null;
+    const sort = { type: null, col: -1, dir: 1 }; // só para marcar ▲/▼ no título: a ordem em si fica no documento
     const root = h('div', { class: 'ent-panel' });
     const draw = () => {
       const D = Store.data, T = TYPES[type], list = D[type];
@@ -170,8 +174,19 @@ const Dialogs = {
       const move = dir => {
         const i = list.indexOf(ent), j = i + dir;
         if (i < 0 || j < 0 || j >= list.length) return;
-        list.splice(i, 1); list.splice(j, 0, ent); after();
+        list.splice(i, 1); list.splice(j, 0, ent); sort.col = -1; after();
       };
+      // Clique no título da coluna reordena o próprio cadastro (é a ordem das linhas na grade e no PDF, a mesma
+      // que os botões ↑ ↓ ajustam): 1º clique crescente, 2º decrescente.
+      const sortBy = i => {
+        sort.dir = sort.type === type && sort.col === i ? -sort.dir : 1;
+        sort.type = type; sort.col = i;
+        const c = cols[i], key = c.key || (e => { const v = c.cell(e); return v && v.nodeType ? v.textContent : String(v == null ? '' : v); });
+        const sorted = list.map((e, k) => [key(e), k, e]).sort((a, b) => sort.dir * Fmt.cmp(a[0], b[0]) || a[1] - b[1]).map(x => x[2]);
+        list.splice.apply(list, [0, list.length].concat(sorted));
+        after();
+      };
+      const mark = i => (sort.type === type && sort.col === i ? (sort.dir === 1 ? '▲' : '▼') : '↕');
       root.textContent = '';
       root.appendChild(h('div', { class: 'ent-side' }, Object.keys(TYPES).map(k => h('button', {
         class: 'ent-tab' + (k === type ? ' active' : ''), title: TYPES[k].title,
@@ -179,7 +194,8 @@ const Dialogs = {
       }, h('span', { class: 'ico' }, TYPES[k].icon), h('span', null, TYPES[k].title)))));
       root.appendChild(h('div', { class: 'ent-main' }, h('div', { class: 'ent-label' }, T.list),
         h('div', { class: 'table-wrap' }, h('table', { class: 'grid-table' },
-          h('thead', null, h('tr', null, cols.map(c => h('th', null, c.label)))),
+          h('thead', null, h('tr', null, cols.map((c, i) => h('th', { class: 'sortable' + (mark(i) !== '↕' ? ' sorted' : ''), title: 'Ordenar por ' + c.label.toLowerCase(), onclick: () => sortBy(i) },
+            c.label, h('span', { class: 'sort-mark' }, mark(i)))))),
           h('tbody', null, list.map(e => h('tr', {
             class: e.id === sel ? 'sel' : '', onclick: () => { sel = e.id; draw(); }, ondblclick: () => { sel = e.id; draw(); edit(); }
           }, cols.map(c => h('td', { class: c.cls || '' }, c.cell(e))))))),
@@ -391,13 +407,30 @@ const Dialogs = {
     const ent = filter && Core.find(D[filter.type], filter.id);
     const box = h('div', { class: 'table-wrap', style: 'height:340px' });
     const total = h('span', { class: 'hint' });
-    const list = () => D.lessons.filter(l => !filter || Core.lessonInvolves(D, l, filter.type, filter.id));
+    // ordenação só da listagem (não muda a ordem das aulas no documento): clique no título da coluna
+    // alterna crescente → decrescente → ordem original
+    const COLS = [
+      { label: 'Disciplina', key: l => Fmt.subject(l) }, { label: 'Professor', key: l => Fmt.teachers(l) }, { label: 'Turma', key: l => Fmt.classes(l) },
+      { label: 'Quant.', key: l => l.count }, { label: 'Duração', key: l => l.duration }, { label: 'Salas', key: l => Fmt.rooms(l) }];
+    const sort = { col: -1, dir: 1 };
+    const list = () => {
+      const ls = D.lessons.filter(l => !filter || Core.lessonInvolves(D, l, filter.type, filter.id));
+      if (sort.col < 0) return ls;
+      const key = COLS[sort.col].key;
+      // o índice original desempata, para a ordem ficar estável nos dois sentidos
+      return ls.map((l, i) => [key(l), i, l]).sort((a, b) => sort.dir * Fmt.cmp(a[0], b[0]) || a[1] - b[1]).map(x => x[2]);
+    };
+    const sortBy = i => {
+      if (sort.col !== i) { sort.col = i; sort.dir = 1; } else if (sort.dir === 1) sort.dir = -1; else sort.col = -1;
+      draw();
+    };
     const draw = () => {
       const ls = list();
       if (sel && !ls.some(l => l.id === sel)) sel = null;
       box.textContent = '';
       box.appendChild(h('table', { class: 'grid-table' },
-        h('thead', null, h('tr', null, ['Disciplina', 'Professor', 'Turma', 'Quant.', 'Duração', 'Salas'].map(t => h('th', null, t)))),
+        h('thead', null, h('tr', null, COLS.map((c, i) => h('th', { class: 'sortable' + (sort.col === i ? ' sorted' : ''), title: 'Ordenar por ' + c.label.toLowerCase(), onclick: () => sortBy(i) },
+          c.label, h('span', { class: 'sort-mark' }, sort.col === i ? (sort.dir === 1 ? '▲' : '▼') : '↕'))))),
         h('tbody', null, ls.map(l => h('tr', { class: l.id === sel ? 'sel' : '', onclick: () => { sel = l.id; draw(); }, ondblclick: () => { sel = l.id; edit(); } },
           h('td', null, h('i', { class: 'swatch', style: 'background:' + Fmt.color(l) }), Fmt.subject(l)),
           h('td', null, Fmt.teachers(l)), h('td', null, Fmt.classes(l)), h('td', { class: 'num' }, String(l.count)),
@@ -431,6 +464,17 @@ const Dialogs = {
           after(); UI.toast('Aula copiada para ' + ids.length + ' turma(s).');
         } },
         filter && filter.type === 'classes' ? { label: 'Adicionar mais', left: true, onClick: async () => { if (await Dialogs.addMany(ent)) after(); } } : null,
+        // só na listagem geral: troca o professor de todas as aulas por "automático" (escolhido pela especialidade na criação)
+        !filter ? { label: '★ Professores automáticos', left: true, onClick: async () => {
+          const has = l => D.teachers.some(t => (t.subjectIds || []).indexOf(l.subjectId) >= 0);
+          const todo = D.lessons.filter(l => has(l) && !(l.autoTeacher && !l.teacherIds.length)), skip = D.lessons.filter(l => !has(l) && l.teacherIds.length);
+          if (!todo.length) { UI.toast(skip.length ? 'Nenhuma aula alterada: falta professor com a especialidade das disciplinas.' : 'Todas as aulas já estão com professor automático.'); return; }
+          if (!await UI.confirm('Trocar o professor de ' + todo.length + ' aula(s) por "automático"?\nOs professores atuais dessas aulas serão removidos; na próxima criação do horário, cada aula recebe um professor com a especialidade da disciplina.' +
+            (skip.length ? '\n\n' + skip.length + ' aula(s) ficam como estão, porque nenhum professor tem a especialidade da disciplina.' : ''), 'Trocar')) return;
+          todo.forEach(l => { l.teacherIds = []; l.autoTeacher = true; });
+          after();
+          UI.toast(todo.length + ' aula(s) agora com professor automático.' + (skip.length ? ' ' + skip.length + ' mantida(s) sem alteração.' : ''));
+        } } : null,
         { label: 'Fechar' }].filter(Boolean)
     });
   },
