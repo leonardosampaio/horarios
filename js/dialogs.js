@@ -466,12 +466,11 @@ const Dialogs = {
         filter && filter.type === 'classes' ? { label: 'Adicionar mais', left: true, onClick: async () => { if (await Dialogs.addMany(ent)) after(); } } : null,
         // só na listagem geral: troca o professor de todas as aulas por "automático" (escolhido pela especialidade na criação)
         !filter ? { label: '★ Professores automáticos', left: true, onClick: async () => {
-          const has = l => D.teachers.some(t => (t.subjectIds || []).indexOf(l.subjectId) >= 0);
-          const todo = D.lessons.filter(l => has(l) && !(l.autoTeacher && !l.teacherIds.length)), skip = D.lessons.filter(l => !has(l) && l.teacherIds.length);
+          const plan = Solver.autoTeacherPlan(D, false), todo = plan.todo, skip = plan.skip;
           if (!todo.length) { UI.toast(skip.length ? 'Nenhuma aula alterada: falta professor com a especialidade das disciplinas.' : 'Todas as aulas já estão com professor automático.'); return; }
           if (!await UI.confirm('Trocar o professor de ' + todo.length + ' aula(s) por "automático"?\nOs professores atuais dessas aulas serão removidos; na próxima criação do horário, cada aula recebe um professor com a especialidade da disciplina.' +
             (skip.length ? '\n\n' + skip.length + ' aula(s) ficam como estão, porque nenhum professor tem a especialidade da disciplina.' : ''), 'Trocar')) return;
-          todo.forEach(l => { l.teacherIds = []; l.autoTeacher = true; });
+          Solver.setAutoTeachers(D, false);
           after();
           UI.toast(todo.length + ' aula(s) agora com professor automático.' + (skip.length ? ' ' + skip.length + ' mantida(s) sem alteração.' : ''));
         } } : null,

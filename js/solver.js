@@ -364,6 +364,24 @@
     return res;
   }
 
+  /* Aulas que podem passar a ter professor "automático": as que têm algum especialista na disciplina.
+     skip = aulas com professor que ficam como estão (sem especialista ou, com keepLocked, com cartão travado). */
+  function autoTeacherPlan(data, keepLocked) {
+    const has = l => data.teachers.some(t => (t.subjectIds || []).indexOf(l.subjectId) >= 0);
+    const locked = new Set(keepLocked ? data.cards.filter(c => c.locked && c.day != null).map(c => c.lessonId) : []);
+    const todo = [], skip = [];
+    data.lessons.forEach(l => {
+      if (l.autoTeacher && !l.teacherIds.length) return;
+      if (has(l) && !locked.has(l.id)) todo.push(l); else if (l.teacherIds.length) skip.push(l);
+    });
+    return { todo: todo, skip: skip };
+  }
+  function setAutoTeachers(data, keepLocked) {
+    const plan = autoTeacherPlan(data, keepLocked);
+    plan.todo.forEach(l => { l.teacherIds = []; l.autoTeacher = true; });
+    return plan;
+  }
+
   /* Verificações feitas antes da criação (botão "Teste"). */
   function test(data) {
     const sch = data.school;
@@ -695,7 +713,7 @@
     return issues;
   }
 
-  const Solver = { buildModel, relationText, autoAssignTeachers, test, generate, verify };
+  const Solver = { buildModel, relationText, autoAssignTeachers, autoTeacherPlan, setAutoTeachers, test, generate, verify };
   if (typeof module !== 'undefined' && module.exports) module.exports = Solver;
   root.Solver = Solver;
 })(typeof window !== 'undefined' ? window : globalThis);

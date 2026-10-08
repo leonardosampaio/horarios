@@ -209,7 +209,7 @@ const App = {
   generate() {
     const D = Store.data;
     if (!D.lessons.length) { UI.alert('Criação de horário', 'Ainda não há aulas cadastradas. Abra Turmas (ou Disciplinas/Professores), selecione um registro e use o botão "Aulas".'); return; }
-    const o = { method: 'milp', versions: 1, complexity: 1, strict: true, restricted: false };
+    const o = { method: 'milp', versions: 1, complexity: 1, strict: true, restricted: false, autoTeachers: true };
     const slider = h('input', { type: 'range', min: 1, max: 3, step: 1, value: 1, oninput: e => { o.complexity = +e.target.value; } });
     const radio = (name, label, hint, checked, set) => h('label', { class: 'check' }, h('input', { type: 'radio', name: name, checked: checked, onchange: set }), h('span', null, label, h('small', null, hint)));
     const modal = UI.modal({
@@ -223,6 +223,10 @@ const App = {
           radio('method', '🎲 Somente heurística (busca local)', 'Mais rápida em escolas muito grandes; não usa o modelo matemático.', false, () => { o.method = 'heur'; }),
           h('label', { class: 'inline' }, 'Versões a gerar: ', UI.select([1, 2, 3, 4, 5].map(n => ({ value: n, label: String(n) })), 1, v => { o.versions = +v; }),
             h('span', { class: 'hint' }, ' cada versão é um horário diferente que obedece às mesmas restrições; todas ficam guardadas em "Versões".'))),
+        h('fieldset', null, h('legend', null, 'Professores'),
+          UI.check(['★ Usar professores automáticos em todas as aulas', h('small', null, 'Como o botão de "Aulas": os professores atuais são descartados e cada aula recebe um professor com a ' +
+            'especialidade da disciplina. Ficam como estão as aulas sem especialista e as que têm cartão travado. Desmarque para manter os professores já definidos.')],
+            o.autoTeachers, v => { o.autoTeachers = v; })),
         h('div', { class: 'row top' },
           h('fieldset', { class: 'grow' }, h('legend', null, 'Complexidade da criação'),
             h('div', { class: 'cx' }, h('span', null, '🙂', h('br'), 'Normal'), h('span', null, '🧑‍💼', h('br'), 'Grande'), h('span', null, '👥', h('br'), 'Enorme')), slider,
@@ -275,11 +279,13 @@ const App = {
       title: 'Criando o horário…', width: 480, noFocus: true, body: h('div', null, h('div', { class: 'progress' }, fill), text),
       onClose: () => { if (!finished) { ctl.cancelled = true; if (ctl.abort) ctl.abort(); } }, buttons: [{ label: 'Cancelar' }]
     });
-    const backup = JSON.stringify(D.cards);
+    const backup = JSON.stringify(D.cards), teachersBackup = D.lessons.map(l => [l, l.teacherIds.slice(), !!l.autoTeacher]);
     const made = [];
+    let autoCount = 0;
     const base = Date.now() & 0xffffff;
     try {
-      Solver.autoAssignTeachers(D);
+      if (o.autoTeachers) Solver.setAutoTeachers(D, true); // aulas com cartão travado mantêm o professor
+      autoCount = Solver.autoAssignTeachers(D).assigned;
       Core.syncCards(D);
       for (let i = 0; i < o.versions; i++) {
         const label = o.versions > 1 ? 'Versão ' + (i + 1) + ' de ' + o.versions + ' — ' : '';
@@ -298,12 +304,14 @@ const App = {
           fill.style.width = Math.round(((i + (milp ? 0.5 + part / 2 : part)) / o.versions) * 100) + '%';
           text.textContent = label + (v.phase === 1 ? 'colocando os cartões restantes sem choques… ' : v.phase === 2 ? 'polindo janelas e distribuição… ' : 'retirando o que quebra condições… ') + v.iterations.toLocaleString('pt-BR') + ' horários verificados';
         });
+        if (autoCount) stats.autoAssigned = autoCount;
         const version = App.saveVersion(null, milp ? 'Programação inteira' : 'Heurística');
         made.push({ version: version, stats: stats, milp: milp && milp.info });
       }
     } catch (err) {
       finished = true; modal.close();
       D.cards = JSON.parse(backup);
+      teachersBackup.forEach(x => { x[0].teacherIds = x[1]; x[0].autoTeacher = x[2]; });
       Store.commit();
       if (err.message === 'cancel') UI.toast('Criação cancelada; o horário anterior foi mantido.');
       else UI.alert('Criação de horário', 'Ocorreu um erro: ' + err.message);
@@ -347,7 +355,9 @@ const App = {
       id: Core.uid('v'), name: name || 'Versão ' + n, created: new Date().toISOString(), method: method || 'Manual',
       unplaced: D.cards.filter(c => c.day == null).length, errors: issues.filter(i => i.level === 'error' && !/não colocado/.test(i.text)).length,
       warnings: issues.filter(i => i.level === 'warn').length,
-      placements: D.cards.filter(c => c.day != null).map(c => ({ id: c.id, day: c.day, period: c.period, roomId: c.roomId, locked: !!c.locked }))
+      placements: D.cards.filter(c => c.day != null).map(c => ({ id: c.id, day: c.day, period: c.period, roomId: c.roomId, locked: !!c.locked })),
+      // o professor de cada aula faz parte da versão: a criação pode redistribuí-los
+      teachers: Object.fromEntries(D.lessons.map(l => [l.id, l.teacherIds.slice()]))
     };
     D.versions.push(v);
     D.currentVersion = v.id;
@@ -357,6 +367,7 @@ const App = {
 
   loadVersion(v) {
     const D = Store.data, pos = new Map(v.placements.map(p => [p.id, p]));
+    if (v.teachers) D.lessons.forEach(l => { const t = v.teachers[l.id]; if (t) l.teacherIds = t.filter(id => Core.find(D.teachers, id)); });
     D.cards.forEach(c => {
       const p = pos.get(c.id);
       c.day = p ? p.day : null; c.period = p ? p.period : null; c.roomId = p ? p.roomId : null; c.locked = !!(p && p.locked);
