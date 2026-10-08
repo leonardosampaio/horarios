@@ -56,6 +56,7 @@ Movimentos manuais nunca são bloqueados: `inspect()` explica o que é desobedec
 
     npm test          # suíte (node --test tests/*.test.js), baseada nos exemplos de asc/exemplos
     bash/build.sh     # FORMA PADRÃO do build: testes + build num container Docker temporário (node:22-slim)
+    bash/publicar.sh  # build + publicação em leonardosampaio.dev/horarios (roda no servidor)
     npm run build     # roda a suíte (prebuild) e gera public/ minificado com esbuild (build.mjs)
     npm run comparar  # relatório: gerador x horários originais, várias sementes
 
@@ -67,6 +68,13 @@ Movimentos manuais nunca são bloqueados: `inspect()` explica o que é desobedec
 - `public/` é saída de build: nunca editar à mão. O build concatena os `js/` na ordem das tags `<script>` do
   `index.html` em `public/js/app.min.js`; **ao criar um arquivo novo em `js/`, acrescente-o ao `index.html` e à lista
   `APP` de `build.mjs`** (o build falha se as duas divergirem). O worker vira um pacote próprio (`WORKER`).
+- **Publicação:** `bash/publicar.sh` (build + `rsync --delete` de `public/` para
+  `/var/www/html/leonardosampaio.dev/horarios`, servido em https://leonardosampaio.dev/horarios/). O repositório fica
+  no próprio servidor (nginx atrás do Cloudflare). `nginx/horarios.conf` é o snippet da aplicação (redirect, cache,
+  gzip); instalá-lo em `/etc/nginx/snippets/` e recarregar o nginx exige `sudo` com senha, então isso fica com o
+  usuário. Passo a passo no `README.md`.
+- O servidor tem 2 vCPUs: o caso 1 do PLI leva ~22 s lá. O `timeLimit` em `tests/milp.test.js` é teto (60 s nos
+  testes que precisam fechar o ótimo); prazo curto demais aparece como "0 aulas colocadas", não como erro do modelo.
 - A interface é testada com Playwright/Chromium headless fora do repositório (abrir `index.html` ou
   `public/index.html`, carregar um exemplo, "Criar novo", arrastar cartões, exportar).
 

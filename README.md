@@ -42,3 +42,42 @@ ou, com Node instalado:
 
 `public/` é autocontida: publique a pasta em qualquer hospedagem de arquivos estáticos (ou abra `public/index.html`).
 `npm run comparar` mostra o gerador contra os horários originais em várias sementes.
+
+## Publicação (https://leonardosampaio.dev/horarios/)
+
+O repositório fica clonado no próprio servidor do site (nginx). Para publicar uma versão nova:
+
+    git pull
+    bash/publicar.sh              # testes + build (Docker) + cópia de public/ para a pasta servida
+
+O script chama `bash/build.sh` e sincroniza `public/` com `/var/www/html/leonardosampaio.dev/horarios`
+(`rsync --delete`: a pasta de destino é só desta aplicação). Variáveis:
+
+| Variável | Efeito |
+|---|---|
+| `SKIP_TESTS=1` | faz o build sem rodar a suíte |
+| `SKIP_BUILD=1` | publica o `public/` que já existe |
+| `DEST=/pasta` | outro destino (ajuste também o `alias` de `nginx/horarios.conf`) |
+
+No servidor (2 vCPUs) a suíte leva perto de dois minutos, quase tudo nos testes do PLI. O `timeLimit` deles é um
+teto: se o HiGHS não chegar a uma solução dentro do prazo, o teste falha com 0 aulas colocadas — nesse caso o
+problema é o prazo em `tests/milp.test.js`, não o modelo.
+
+### nginx
+
+Como o destino fica dentro da raiz do site, a aplicação já responde em `/horarios/` pelo `location /` existente.
+`nginx/horarios.conf` é o trecho próprio da aplicação: redireciona `/horarios` para `/horarios/`, manda
+`Cache-Control: no-cache` (os arquivos de `vendor/` e o `milp-worker.js` não têm hash no nome, então o navegador e
+o Cloudflare precisam revalidar para uma publicação valer na hora) e comprime JS e CSS. Instalação, uma única vez:
+
+    sudo cp nginx/horarios.conf /etc/nginx/snippets/horarios.conf
+
+Depois acrescente `include snippets/horarios.conf;` dentro de cada bloco `server` de
+`/etc/nginx/sites-available/leonardosampaio.dev` que escuta na porta 443 (ao lado dos outros `include snippets/...`) e
+recarregue:
+
+    sudo nginx -t && sudo systemctl reload nginx
+
+Ao alterar `nginx/horarios.conf` no repositório, repita a cópia e o reload. Para conferir sem passar pelo Cloudflare:
+
+    curl -skI --resolve leonardosampaio.dev:443:127.0.0.1 https://leonardosampaio.dev/horarios/

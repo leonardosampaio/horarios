@@ -3,12 +3,14 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { Core, Milp, run, errors, warnings, placed } = require('./helpers.js');
 
 // limite de avisos: o horário feito à mão/aSc tem 21 (caso 1) e 33 (caso 2); só a heurística dá ~43
-const CASES = [{ n: 1, max: 30 }, { n: 2, max: 33 }];
+// timeLimit é teto, não duração: o HiGHS para antes ao provar o ótimo. O caso 1 leva ~22 s numa máquina de 2 vCPUs
+// e, com o prazo curto demais, termina sem solução nenhuma (0 aulas colocadas).
+const CASES = [{ n: 1, max: 30, timeLimit: 60 }, { n: 2, max: 33, timeLimit: 12 }];
 
 for (const c of CASES) {
   test(`PLI, caso ${c.n}: horário completo, sem choques e com no máximo ${c.max} condições quebradas`, async () => {
     const d = Core.realDoc(c.n, false);
-    const r = await Milp.solve(d, { complexity: 1, strict: true, seed: 22, timeLimit: 12 });
+    const r = await Milp.solve(d, { complexity: 1, strict: true, seed: 22, timeLimit: c.timeLimit });
     assert.ok(['Optimal', 'Time limit reached'].includes(r.info.status), r.info.status);
     assert.equal(r.placements.length, d.cards.length, 'o modelo sozinho já coloca todas as aulas');
     const s = run(d, { seed: 22, start: r.placements });
@@ -36,6 +38,6 @@ test('PLI com dados inviáveis coloca o máximo possível em vez de falhar', asy
   const d = Core.realDoc(2, false);
   d.lessons[0].count += 3; // a turma passa a ter 28 aulas para 25 posições
   Core.syncCards(d);
-  const r = await Milp.solve(d, { complexity: 1, strict: true, seed: 1, timeLimit: 8 });
+  const r = await Milp.solve(d, { complexity: 1, strict: true, seed: 1, timeLimit: 60 });
   assert.ok(r.placements.length >= d.cards.length - 6 && r.placements.length < d.cards.length);
 });
