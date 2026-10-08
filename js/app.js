@@ -209,7 +209,7 @@ const App = {
   generate() {
     const D = Store.data;
     if (!D.lessons.length) { UI.alert('Criação de horário', 'Ainda não há aulas cadastradas. Abra Turmas (ou Disciplinas/Professores), selecione um registro e use o botão "Aulas".'); return; }
-    const o = { method: 'milp', versions: 1, complexity: 1, strict: true, restricted: true };
+    const o = { method: 'milp', versions: 1, complexity: 1, strict: true, restricted: false };
     const slider = h('input', { type: 'range', min: 1, max: 3, step: 1, value: 1, oninput: e => { o.complexity = +e.target.value; } });
     const radio = (name, label, hint, checked, set) => h('label', { class: 'check' }, h('input', { type: 'radio', name: name, checked: checked, onchange: set }), h('span', null, label, h('small', null, hint)));
     const modal = UI.modal({
@@ -229,8 +229,8 @@ const App = {
             h('p', { class: 'hint' }, 'Quanto maior, mais tempo o resolvedor tem para procurar um horário melhor.')),
           h('fieldset', null, h('legend', null, 'Restrições'),
             radio('strict', '😊 Permitir relaxamento de condições', 'Pode usar posições condicionais (?) do tempo livre.', false, () => { o.strict = false; o.restricted = false; }),
-            radio('strict', '⛔ Rigoroso', 'Só usa posições adequadas (✔).', false, () => { o.strict = true; o.restricted = false; }),
-            radio('strict', '🔒 Restrito', 'Só posições adequadas (✔) e nenhuma condição quebrada: a aula que não couber fica na bandeja.', true, () => { o.strict = true; o.restricted = true; }))),
+            radio('strict', '⛔ Rigoroso', 'Só usa posições adequadas (✔).', true, () => { o.strict = true; o.restricted = false; }),
+            radio('strict', '🔒 Restrito', 'Só posições adequadas (✔) e nenhuma condição quebrada: a aula que não couber fica na bandeja.', false, () => { o.strict = true; o.restricted = true; }))),
         h('p', { class: 'hint' }, 'Os cartões travados (🔒) permanecem onde estão; os demais são redistribuídos.')),
       buttons: [{ label: 'Cancelar' }]
     });

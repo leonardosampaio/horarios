@@ -52,8 +52,8 @@ travados. Moles (ponderadas, pesos em `W` de `solver.js` e `milp.js` — manter 
 início tardio da turma, disciplina repetida no dia, limites por dia, relações, posições condicionais.
 Movimentos manuais nunca são bloqueados: `inspect()` explica o que é desobedecido e o usuário decide.
 
-Modos da criação (campo "Restrições"): relaxamento (aceita posições condicionais), **Rigoroso** (`strict`: só
-posições adequadas) e **Restrito** (`restricted`, padrão da interface: Rigoroso + nenhuma condição mole quebrada).
+Modos da criação (campo "Restrições"): relaxamento (aceita posições condicionais), **Rigoroso** (`strict`, padrão
+da interface: só posições adequadas) e **Restrito** (`restricted`: Rigoroso + nenhuma condição mole quebrada).
 No Restrito as moles viram linhas rígidas no PLI e a fase 3 de `Solver.generate` devolve à bandeja o cartão que
 ainda quebrar alguma; o resultado pode ficar incompleto (casos reais: ~20 a 30 cartões fora), nunca com avisos,
 salvo os que os cartões travados já causam sozinhos.
