@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Horários</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="toolbar">
+    <div class="tb-group">
+      <button class="tb" data-action="new"><span>📄</span>Novo</button>
+      <button class="tb" data-action="open" title="Abre um .json deste sistema ou importa um .roz do aSc TimeTables"><span>📂</span>Abrir</button>
+      <button class="tb" data-action="save" title="Baixa um arquivo .json com os cadastros, o horário e as versões"><span>💾</span>Salvar JSON</button>
+      <button class="tb" data-action="pdf" title="Salvar o horário em PDF ou imprimir"><span>📄</span>PDF / Imprimir</button>
+    </div>
+    <div class="tb-group">
+      <button class="tb" data-action="subjects"><span>📘</span>Disciplinas</button>
+      <button class="tb" data-action="classes"><span>👥</span>Turmas</button>
+      <button class="tb" data-action="rooms"><span>🏠</span>Salas</button>
+      <button class="tb" data-action="teachers"><span>🎓</span>Professores</button>
+      <button class="tb" data-action="lessons"><span>📚</span>Aulas</button>
+      <button class="tb" data-action="relations"><span>🔗</span>Relações</button>
+    </div>
+    <div class="tb-group">
+      <button class="tb" data-action="test"><span>✅</span>Teste</button>
+      <button class="tb hot" data-action="generate"><span>🚨</span>Criar novo</button>
+      <button class="tb" data-action="verify"><span>🔦</span>Verificação</button>
+      <button class="tb" data-action="versions"><span>🗂️</span>Versões</button>
+    </div>
+    <div class="tb-group">
+      <button class="tb" data-action="school"><span>🏫</span>Escola</button>
+      <button class="tb" data-action="wizard"><span>🎩</span>Assistente</button>
+      <button class="tb" data-action="sample"><span>🧪</span>Exemplo</button>
+    </div>
+    <div id="doc-title"></div>
+  </header>
+
+  <div id="subbar">
+    <div id="view-controls"></div>
+    <div class="grow"></div>
+    <button class="btn" data-action="lockAll" title="Travar todos os cartões colocados">🔒 Travar todos</button>
+    <button class="btn" data-action="unlockAll" title="Destravar todos os cartões">🔓 Destravar</button>
+    <button class="btn" data-action="clearAll" title="Devolver à bandeja os cartões não travados">↩ Limpar horário</button>
+    <label class="inline">Zoom <input id="zoom" type="range" min="20" max="60" step="2"></label>
+  </div>
+
+  <main id="grid-wrap"><div id="grid"></div></main>
+
+  <section id="bottom">
+    <div id="info"></div>
+    <div id="tray"></div>
+  </section>
+
+  <footer id="status"></footer>
+  <input id="file-input" type="file" accept=".json,.roz,application/json" hidden>
+
+  <script src="vendor/highs.js"></script>
+  <script src="vendor/highs-wasm.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/exemplo.js"></script>
+  <script src="js/solver.js"></script>
+  <script src="js/milp.js"></script>
+  <script src="js/roz.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/dialogs.js"></script>
+  <script src="js/grid.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

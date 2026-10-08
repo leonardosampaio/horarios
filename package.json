@@ -1,0 +1,14 @@
+{
+  "name": "horarios",
+  "private": true,
+  "description": "Criação de horários escolares no navegador",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "prebuild": "npm test",
+    "build": "node build.mjs",
+    "comparar": "node tests/validar.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
