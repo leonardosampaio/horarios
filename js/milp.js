@@ -11,7 +11,9 @@
      Σ y que precisam das salas de S em (d, p) ≤ |S|      (capacidade de salas)
      posições "inadequadas" do tempo livre e choques com cartões travados não geram variável
    Função objetivo (minimizar): janelas de turmas e professores, início tardio da turma, disciplina
-     repetida no dia, limites por dia, relações entre cartões, posições condicionais e aula zero. */
+     repetida no dia, limites por dia, relações entre cartões, posições condicionais e aula zero.
+   Modo restrito (`restricted`): as condições acima deixam de ser penalidade e viram restrição rígida (sem folga);
+     a aula que não couber sem quebrar alguma fica sem posição (u[g]). */
 (function (root) {
   'use strict';
   const Core = root.Core || require('./core.js');
@@ -41,7 +43,8 @@
 
   function buildModel(data, opts) {
     const P = data.school.params || {};
-    const M = Solver.buildModel(data, { generating: true, strict: !!opts.strict });
+    const strict = !!(opts.strict || opts.restricted);
+    const M = Solver.buildModel(data, { generating: true, strict: strict });
     const D = M.D, PW = M.PW, first = M.genFirst, last = M.last;
     M.cards.forEach(m => { const c = m.ref; if (c.locked && c.day != null) { M.place(m, c.day, c.period, M.R.get(c.roomId) || null); m.locked = true; } });
 
@@ -56,6 +59,9 @@
     // linha: Σ coef·var (op) rhs
     const row = (terms, op, rhs) => { if (terms.length) rows.push({ terms: terms, op: op, rhs: rhs }); };
     const sum = (vars, coef) => vars.map(v => [coef || 1, v]);
+    // condição mole: Σ ≤ rhs com folga penalizada; no restrito, sem folga (o que os travados já ocupam não conta contra)
+    const hard = !!opts.restricted && opts.hard !== false;
+    const soft = (terms, rhs, w) => row(hard ? terms : terms.concat([[-1, newVar('o', w)]]), '<=', hard ? Math.max(0, rhs) : rhs);
 
     // ---- grupos de cartões idênticos e variáveis y ----
     const groups = new Map();
@@ -138,7 +144,7 @@
         const idx = d * PW + p;
         let vars = [];
         subsets.forEach(k => { const v = setCover.get(k) && setCover.get(k).get(idx); if (v) vars = vars.concat(v); });
-        const cap = ids.filter(id => M.off(M.R.get(id), d, p) !== 2 && !M.occR.get(id)[idx].length).length;
+        const cap = ids.filter(id => M.off(M.R.get(id), d, p) <= (strict ? 0 : 1) && !M.occR.get(id)[idx].length).length;
         if (vars.length > cap) row(sum(vars), '<=', cap);
       }
     });
@@ -153,37 +159,48 @@
       distKey.forEach((vars, dk) => {
         const k = dk.slice(0, dk.lastIndexOf('#'));
         const allow = Math.max(0, Math.ceil(total.get(k) / D) - (lockedDay.get(dk) || 0));
-        if (vars.length > allow) row(sum(vars).concat([[-1, newVar('o', W.dist)]]), '<=', allow);
+        if (vars.length > allow) soft(sum(vars), allow, W.dist);
       });
     }
 
     // ---- limites por dia: disciplina e relações entre cartões (moles) ----
+    const lockedSubj = new Map();                       // turma|disciplina#dia -> tempos já ocupados por travados
+    M.cards.forEach(m => { if (m.locked && m.subject) m.classes.forEach(c => { const k = c.id + '|' + m.subject.id + '#' + m.day; lockedSubj.set(k, (lockedSubj.get(k) || 0) + m.dur); }); });
     data.classes.forEach(c => {
       for (let d = 0; d < D; d++) {
         const of = sid => subjDay.get(c.id + '|' + sid + '#' + d) || [];
-        data.subjects.forEach(s => { const t = of(s.id); if (s.maxPerDay != null && t.length) row(t.concat([[-1, newVar('o', W.limit)]]), '<=', s.maxPerDay); });
+        const fixed = sid => lockedSubj.get(c.id + '|' + sid + '#' + d) || 0;
+        data.subjects.forEach(s => { const t = of(s.id); if (s.maxPerDay != null && t.length) soft(t, s.maxPerDay - fixed(s.id), W.limit); });
         data.relations.forEach(r => {
           if (r.classIds && r.classIds.length && r.classIds.indexOf(c.id) < 0) return;
           if (r.type === 'max_per_day') {
-            let t = []; r.subjectIds.forEach(sid => { t = t.concat(of(sid)); });
-            if (t.length) row(t.concat([[-1, newVar('o', W.limit)]]), '<=', r.max);
+            let t = [], n = 0; r.subjectIds.forEach(sid => { t = t.concat(of(sid)); n += fixed(sid); });
+            if (t.length) soft(t, r.max - n, W.limit);
           } else {
             const zs = [];
-            r.subjectIds.forEach(sid => { const t = of(sid); if (!t.length) return; const z = newVar('z', 0); zs.push(z); t.forEach(x => row([[1, z], [-1, x[1]]], '>=', 0)); });
-            if (zs.length > 1) row(sum(zs).concat([[-1, newVar('o', W.limit)]]), '<=', 1);
+            let n = 0;
+            r.subjectIds.forEach(sid => {
+              if (fixed(sid)) { n++; return; }
+              const t = of(sid); if (!t.length) return; const z = newVar('z', 0); zs.push(z); t.forEach(x => row([[1, z], [-1, x[1]]], '>=', 0));
+            });
+            if (zs.length + n > 1) soft(sum(zs), 1 - n, W.limit);
           }
         });
       }
     });
 
     // ---- janelas: s[p] = "já começou", e[p] = "ainda não terminou"; janela[p] ≥ s[p] + e[p] − 1 − ocupado[p] ----
-    function gaps(cover, lockedOcc, wGap, lateOf, sumsOf, maxPerDay, load) {
+    // lim (só no restrito): {noGap, noLate} proíbem janela e início tardio (`block`: os dois, em turma sem grupos);
+    // {maxGaps, maxCons} limitam as janelas da semana e as aulas consecutivas
+    function gaps(cover, lockedOcc, wGap, lateOf, sumsOf, maxPerDay, load, lim) {
       if (!cover) return;
+      const ws = [];
       // grade cheia: se a carga ocupa todas as posições disponíveis, não existe janela possível
       // (dispensa centenas de variáveis auxiliares e deixa o modelo bem mais fácil)
       let avail = 0;
       for (let i = 0; i < lockedOcc.length; i++) if (cover.has(i) || lockedOcc[i].length) avail++;
-      const full = load != null && load >= avail;
+      // (no restrito não vale: uma aula pode ficar de fora e abrir a janela)
+      const full = !hard && load != null && load >= avail;
       for (let d = 0; d < D; d++) {
         const busy = [];
         let any = false;
@@ -196,9 +213,21 @@
         if (maxPerDay != null) {
           let t = [], fixed = 0;
           busy.forEach(b => { t = t.concat(sum(b.entries)); fixed += b.lock; });
-          if (t.length + fixed > maxPerDay) row(t.concat([[-1, newVar('o', W.limit)]]), '<=', maxPerDay - fixed);
+          if (t.length + fixed > maxPerDay) soft(t, maxPerDay - fixed, W.limit);
+        }
+        if (lim.maxCons != null) for (let i = 0; i + lim.maxCons < busy.length; i++) {
+          let t = [], fixed = 0;
+          busy.slice(i, i + lim.maxCons + 1).forEach(b => { t = t.concat(sum(b.entries)); fixed += b.lock; });
+          row(t, '<=', Math.max(0, lim.maxCons - fixed));
         }
         if (full) continue;
+        if (lim.block && lateOf(d, busy[0].p)) {
+          // dia em bloco único desde a primeira posição: um tempo só é ocupado se o anterior também for
+          // (o mesmo que "sem janela e sem início tardio", numa forma bem mais fácil para o HiGHS)
+          const occ = b => sumsOf(b.entries, true)[0];
+          for (let i = 0; i + 1 < busy.length; i++) row(sum(occ(busy[i])).concat(sum(occ(busy[i + 1]), -1)), '>=', busy[i + 1].lock - busy[i].lock);
+          continue;
+        }
         const s = busy.map(() => newVar('s', 0)), e = busy.map(() => newVar('e', 0));
         busy.forEach((b, i) => {
           if (b.lock) { row([[1, s[i]]], '>=', 1); row([[1, e[i]]], '>=', 1); }
@@ -206,17 +235,24 @@
           if (i > 0) row([[1, s[i]], [-1, s[i - 1]]], '>=', 0);
           if (i + 1 < busy.length) row([[1, e[i]], [-1, e[i + 1]]], '>=', 0);
           const all = sumsOf(b.entries, true)[0] || [];
-          if (i > 0 && i + 1 < busy.length && !b.lock) row([[1, newVar('w', wGap)], [-1, s[i]], [-1, e[i]]].concat(sum(all)), '>=', -1);
+          // sem janela: só está "entre a primeira e a última aula" quem está ocupado (vale também nas pontas do dia,
+          // o que impede fingir que o dia já começou para escapar do início tardio)
+          if (lim.noGap) { if (!b.lock) row([[1, s[i]], [1, e[i]]].concat(sum(all, -1)), '<=', 1); }
+          else if (i > 0 && i + 1 < busy.length && !b.lock) { const w = newVar('w', wGap); ws.push(w); row([[1, w], [-1, s[i]], [-1, e[i]]].concat(sum(all)), '>=', -1); }
           const wLate = lateOf ? lateOf(d, b.p) : 0;
-          if (wLate && i + 1 < busy.length) row([[1, newVar('h', wLate)], [-1, e[i]], [1, s[i]]], '>=', 0);
+          if (wLate && i + 1 < busy.length) row(lim.noLate ? [[1, s[i]], [-1, e[i]]] : [[1, newVar('h', wLate)], [-1, e[i]], [1, s[i]]], '>=', 0);
         });
       }
+      if (lim.maxGaps != null && ws.length > lim.maxGaps) row(sum(ws), '<=', lim.maxGaps);
     }
-    data.teachers.forEach(t => gaps(tCover.get(t.id), M.occT.get(t.id), W.tgap, null, (e, all) => [e], t.maxPerDay, Core.periodsOf(data, 'teachers', t.id)));
+    const orParam = (own, on, val) => own != null ? own : (on ? val : null);
+    data.teachers.forEach(t => gaps(tCover.get(t.id), M.occT.get(t.id), W.tgap, null, (e, all) => [e], t.maxPerDay, Core.periodsOf(data, 'teachers', t.id),
+      hard ? { maxGaps: orParam(t.maxGaps, P.teacherGaps, P.maxGaps), maxCons: orParam(t.maxConsecutive, P.exhaustion, P.maxConsecutive) } : {}));
     data.classes.forEach(c => gaps(cCover.get(c.id), M.occC.get(c.id), W.cgap,
       (d, p) => { let ref = 1; while (ref < last && M.off(c, d, ref) === 2) ref++; return p >= ref ? (c.allowLateStart ? W.lateAllowed : W.late) : 0; },
       (entries, all) => all ? [entries.map(x => x.v)] : cliqueTerms(c.id, entries), null,
-      cliquesOf.get(c.id).length === 1 ? Core.periodsOf(data, 'classes', c.id) : null));
+      cliquesOf.get(c.id).length === 1 ? Core.periodsOf(data, 'classes', c.id) : null,
+      hard ? { noGap: true, noLate: !c.allowLateStart, block: !c.allowLateStart && cliquesOf.get(c.id).length === 1 } : {}));
 
     // ---- texto no formato LP ----
     const fmt = terms => {
@@ -243,20 +279,25 @@
     Solver.autoAssignTeachers(data);
     Core.syncCards(data);
     const t0 = Date.now();
-    let model = buildModel(data, Object.assign({ tight: true }, opts));
+    // no restrito a grade cheia raramente fecha (alguma aula fica de fora), então já começa pela formulação com folgas
+    let model = buildModel(data, Object.assign({}, opts, { tight: !opts.restricted }));
     const info = { vars: model.vars, binaries: model.binaries, rows: model.rows, status: 'Sem variáveis', objective: null, seconds: 0 };
     const placements = [];
     if (!model.binaries) return { placements: placements, info: info };
     const highs = await getHighs();
     const P = data.school.params || {};
     const options = {
-      time_limit: opts.timeLimit || [12, 30, 120][opts.complexity - 1], mip_rel_gap: 0.005,
+      time_limit: opts.timeLimit || (opts.restricted ? [30, 60, 120] : [12, 30, 120])[opts.complexity - 1], mip_rel_gap: 0.005,
       random_seed: P.different === false ? 1 : (opts.seed || (Date.now() % 100000))
     };
     let res = highs.solve(model.lp, options);
-    if (res.Status !== 'Optimal' && res.Status !== 'Time limit reached') {
-      // dados sem solução completa: volta à formulação com folgas, que coloca o máximo possível
-      model = buildModel(data, Object.assign({}, opts, { tight: false }));
+    // dados sem solução completa: volta à formulação com folgas, que coloca o máximo possível; se nem assim
+    // (restrito com cartões travados que já quebram condições), resolve com as condições moles e o gerador
+    // devolve à bandeja o que quebrar
+    const retry = [{ tight: false }].concat(opts.restricted ? [{ tight: false, hard: false }] : []);
+    for (const r of retry) {
+      if (res.Status === 'Optimal' || res.Status === 'Time limit reached') break;
+      model = buildModel(data, Object.assign({}, opts, r));
       res = highs.solve(model.lp, options);
     }
     info.status = res.Status; info.objective = res.ObjectiveValue; info.seconds = (Date.now() - t0) / 1000;

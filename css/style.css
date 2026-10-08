@@ -22,6 +22,18 @@ p { margin: 0 0 8px; }
 .tb:hover { background: #fff; border-color: #8fb0d8; }
 .tb.hot { font-weight: 600; }
 #doc-title { margin-left: auto; align-self: center; font-weight: 600; color: #2b4a70; padding-right: 6px; }
+#menu-toggle { display: none; }
+/* celular: a barra vira um menu recolhido, com os mesmos botões em lista */
+@media (max-width: 720px) {
+  #toolbar { align-items: center; position: relative; }
+  #menu-toggle { display: block; font-weight: 600; }
+  #doc-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-group { display: none; }
+  #toolbar.open .tb-group { display: flex; flex-direction: column; order: 2; width: 100%; }
+  #toolbar.open { flex-shrink: 0; max-height: 75vh; overflow-y: auto; }
+  .tb { flex-direction: row; gap: 10px; min-width: 0; padding: 8px 10px; font-size: 14px; }
+  .tb span { font-size: 18px; width: 24px; text-align: center; }
+}
 #subbar { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f7f9fc; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 #view-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .inline { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
@@ -52,6 +64,8 @@ input.num { width: 80px; }
 .th.day { font-weight: 700; letter-spacing: .08em; color: #445; border-right-color: var(--line-strong); }
 .th.per { font-size: 10px; color: #556; }
 .th.rowh { font-weight: 600; font-size: 12px; border-right-color: var(--line-strong); white-space: nowrap; }
+.th.click { cursor: pointer; }
+.th.click:hover { text-decoration: underline; }
 .th.corner { border-right-color: var(--line-strong); font-weight: 700; }
 .tt.summary .cell { border-bottom-color: #9aa7b6; }
 .tt.summary .dstart { border-left: 1px solid var(--line-strong); }

@@ -76,7 +76,10 @@ const Grid = {
     grid.style.gridTemplateRows = 'repeat(' + head + ', auto) repeat(' + rows.length + ', var(--ch))';
     const at = (el, row, col, span, rowSpan) => { el.style.gridRow = row + (rowSpan ? ' / span ' + rowSpan : ''); el.style.gridColumn = col + (span ? ' / span ' + span : ''); grid.appendChild(el); return el; };
 
-    at(h('div', { class: 'th corner' }, single ? single.name : ''), 1, 1, 0, head);
+    at(h('div', {
+      class: 'th corner' + (single && opts.interactive ? ' click' : ''), title: single && opts.interactive ? 'Voltar ao total' : '',
+      onclick: single && opts.interactive ? () => { Store.ui.entity = 'all'; Store.saveUi(); } : null
+    }, single ? single.name : ''), 1, 1, 0, head);
     if (single) {
       periods.forEach((p, i) => at(h('div', { class: 'th' }, h('b', null, String(p)), sch.bells[p] ? h('small', null, sch.bells[p]) : null), 1, 2 + i));
     } else {
@@ -97,7 +100,12 @@ const Grid = {
 
     rows.forEach((r, ri) => {
       const row = head + 1 + ri;
-      at(h('div', { class: 'th rowh', title: r.title || '' }, r.label), row, 1);
+      // no total, clicar no nome da linha abre o horário individual (o mesmo que escolher na lista da barra)
+      const open = opts.interactive && !single;
+      at(h('div', {
+        class: 'th rowh' + (open ? ' click' : ''), title: open ? 'Abrir o horário de ' + r.ent.name : r.title || '',
+        onclick: open ? () => { Store.ui.entity = r.ent.id; Store.saveUi(); } : null
+      }, r.label), row, 1);
       r.days.forEach((d, dpos) => {
         periods.forEach((p, i) => {
           const cell = h('div', { class: 'cell' + (i === 0 ? ' dstart' : '') + ((r.ent.timeOff || {})[d.index + '-' + p] === 2 ? ' off' : '') });

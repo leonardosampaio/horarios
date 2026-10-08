@@ -1,6 +1,6 @@
 // Gerador heurístico, verificação e validação de escolhas manuais.
 const test = require('node:test'), assert = require('node:assert/strict');
-const { Core, Solver, run, errors, placed } = require('./helpers.js');
+const { Core, Solver, run, errors, warnings, placed } = require('./helpers.js');
 
 for (const n of [1, 2]) {
   test(`heurística, caso ${n}: coloca todas as aulas sem choques`, () => {
@@ -10,6 +10,26 @@ for (const n of [1, 2]) {
     assert.deepEqual(errors(d).map(e => e.text), []);
   });
 }
+
+test('modo restrito: a heurística não deixa condição quebrada, nem mexe nos travados', () => {
+  const d = Core.realDoc(2, true);
+  const fixos = d.cards.slice(0, 12);
+  fixos.forEach(c => { c.locked = true; });
+  const antes = fixos.map(c => [c.id, c.day, c.period]);
+  // o que os travados quebram sozinhos não tem conserto: é o único aviso admitido
+  const so = JSON.parse(JSON.stringify(d));
+  so.cards.forEach(c => { if (!c.locked) c.day = null; });
+  const inevitaveis = warnings(so).length;
+  const s = run(d, { restricted: true });
+  assert.ok(s.broken <= inevitaveis, s.violations.join(' '));
+  assert.deepEqual(fixos.map(c => [c.id, c.day, c.period]), antes);
+  assert.deepEqual(errors(d).filter(e => !/não colocado/.test(e.text)).map(e => e.text), []);
+  assert.ok(placed(d) >= 100, placed(d) + ' aulas colocadas');
+
+  const livre = Core.realDoc(1, false), t = run(livre, { restricted: true });
+  assert.equal(t.broken, 0);
+  assert.deepEqual(warnings(livre).map(w => w.text), []);
+});
 
 test('escola modelo: salas, aulas duplas e professor automático por especialidade', () => {
   const d = Core.sampleDoc(), s = run(d);

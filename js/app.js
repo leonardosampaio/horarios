@@ -4,6 +4,11 @@
 const App = {
   init() {
     const hasData = Store.load();
+    // no celular a barra vira um menu recolhido (☰): abre com o botão e fecha ao escolher um item ou tocar fora
+    const toolbar = document.getElementById('toolbar'), toggle = document.getElementById('menu-toggle');
+    const menu = open => { toolbar.classList.toggle('open', open); toggle.setAttribute('aria-expanded', String(open)); };
+    toggle.addEventListener('click', () => menu(!toolbar.classList.contains('open')));
+    document.addEventListener('click', e => { if (!e.target.closest('#menu-toggle')) menu(false); });
     document.querySelectorAll('[data-action]').forEach(b => b.addEventListener('click', () => App.actions[b.dataset.action]()));
     document.getElementById('zoom').addEventListener('input', e => { Store.ui.zoom = +e.target.value; Store.saveUi(); });
     document.getElementById('file-input').addEventListener('change', App.openFile);
@@ -204,7 +209,7 @@ const App = {
   generate() {
     const D = Store.data;
     if (!D.lessons.length) { UI.alert('Criação de horário', 'Ainda não há aulas cadastradas. Abra Turmas (ou Disciplinas/Professores), selecione um registro e use o botão "Aulas".'); return; }
-    const o = { method: 'milp', versions: 1, complexity: 1, strict: true };
+    const o = { method: 'milp', versions: 1, complexity: 1, strict: true, restricted: true };
     const slider = h('input', { type: 'range', min: 1, max: 3, step: 1, value: 1, oninput: e => { o.complexity = +e.target.value; } });
     const radio = (name, label, hint, checked, set) => h('label', { class: 'check' }, h('input', { type: 'radio', name: name, checked: checked, onchange: set }), h('span', null, label, h('small', null, hint)));
     const modal = UI.modal({
@@ -223,8 +228,9 @@ const App = {
             h('div', { class: 'cx' }, h('span', null, '🙂', h('br'), 'Normal'), h('span', null, '🧑‍💼', h('br'), 'Grande'), h('span', null, '👥', h('br'), 'Enorme')), slider,
             h('p', { class: 'hint' }, 'Quanto maior, mais tempo o resolvedor tem para procurar um horário melhor.')),
           h('fieldset', null, h('legend', null, 'Restrições'),
-            radio('strict', '😊 Permitir relaxamento de condições', 'Pode usar posições condicionais (?) do tempo livre.', false, () => { o.strict = false; }),
-            radio('strict', '⛔ Rigoroso', 'Só usa posições adequadas (✔).', true, () => { o.strict = true; }))),
+            radio('strict', '😊 Permitir relaxamento de condições', 'Pode usar posições condicionais (?) do tempo livre.', false, () => { o.strict = false; o.restricted = false; }),
+            radio('strict', '⛔ Rigoroso', 'Só usa posições adequadas (✔).', false, () => { o.strict = true; o.restricted = false; }),
+            radio('strict', '🔒 Restrito', 'Só posições adequadas (✔) e nenhuma condição quebrada: a aula que não couber fica na bandeja.', true, () => { o.strict = true; o.restricted = true; }))),
         h('p', { class: 'hint' }, 'Os cartões travados (🔒) permanecem onde estão; os demais são redistribuídos.')),
       buttons: [{ label: 'Cancelar' }]
     });
@@ -241,7 +247,7 @@ const App = {
         w.postMessage({ data: D, opts: opts });
       });
     }
-    return new Promise(r => setTimeout(r, 80)).then(() => Milp.solve(D, Object.assign({ timeLimit: [10, 25, 60][opts.complexity - 1] }, opts)));
+    return new Promise(r => setTimeout(r, 80)).then(() => Milp.solve(D, Object.assign({ timeLimit: (opts.restricted ? [25, 45, 90] : [10, 25, 60])[opts.complexity - 1] }, opts)));
   },
 
   runHeuristic(D, opts, ctl, onProgress) {
@@ -290,7 +296,7 @@ const App = {
         const stats = await App.runHeuristic(D, opts, ctl, v => {
           const part = v.phase === 1 ? v.progress * 0.3 : 0.3 + v.progress * 0.7;
           fill.style.width = Math.round(((i + (milp ? 0.5 + part / 2 : part)) / o.versions) * 100) + '%';
-          text.textContent = label + (v.phase === 1 ? 'colocando os cartões restantes sem choques… ' : 'polindo janelas e distribuição… ') + v.iterations.toLocaleString('pt-BR') + ' horários verificados';
+          text.textContent = label + (v.phase === 1 ? 'colocando os cartões restantes sem choques… ' : v.phase === 2 ? 'polindo janelas e distribuição… ' : 'retirando o que quebra condições… ') + v.iterations.toLocaleString('pt-BR') + ' horários verificados';
         });
         const version = App.saveVersion(null, milp ? 'Programação inteira' : 'Heurística');
         made.push({ version: version, stats: stats, milp: milp && milp.info });
@@ -327,7 +333,7 @@ const App = {
           s.autoAssigned ? h('p', { class: 'hint' }, s.autoAssigned + ' aula(s) receberam professor automaticamente, conforme a especialidade.') : null,
           made.length > 1 ? h('p', { class: 'hint' }, made.length + ' versões geradas: ' + made.map(m => m.version.name + ' (' + m.stats.unplaced + ' não colocados, ' + m.stats.broken + ' condições)').join('; ') +
             '. A melhor (' + best.version.name + ') está aberta; troque em "Versões".') : null,
-          !ok ? h('p', { class: 'hint' }, 'Os cartões restantes ficaram na bandeja. Rode o "Teste", aumente a complexidade, permita o relaxamento ou reveja os tempos livres.') : null,
+          !ok ? h('p', { class: 'hint' }, 'Os cartões restantes ficaram na bandeja. Rode o "Teste", aumente a complexidade, escolha restrições menos exigentes (Rigoroso ou relaxamento) ou reveja os tempos livres.') : null,
           s.broken ? h('div', { class: 'msg-list small' }, s.violations.slice(0, 50).map(t => h('div', { class: 'warn' }, '⚠ ' + t))) : null)),
       buttons: [{ label: 'OK', primary: true }]
     });

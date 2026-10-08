@@ -52,6 +52,12 @@ travados. Moles (ponderadas, pesos em `W` de `solver.js` e `milp.js` — manter 
 início tardio da turma, disciplina repetida no dia, limites por dia, relações, posições condicionais.
 Movimentos manuais nunca são bloqueados: `inspect()` explica o que é desobedecido e o usuário decide.
 
+Modos da criação (campo "Restrições"): relaxamento (aceita posições condicionais), **Rigoroso** (`strict`: só
+posições adequadas) e **Restrito** (`restricted`, padrão da interface: Rigoroso + nenhuma condição mole quebrada).
+No Restrito as moles viram linhas rígidas no PLI e a fase 3 de `Solver.generate` devolve à bandeja o cartão que
+ainda quebrar alguma; o resultado pode ficar incompleto (casos reais: ~20 a 30 cartões fora), nunca com avisos,
+salvo os que os cartões travados já causam sozinhos.
+
 ## Testes e build
 
     npm test          # suíte (node --test tests/*.test.js), baseada nos exemplos de asc/exemplos
@@ -62,7 +68,7 @@ Movimentos manuais nunca são bloqueados: `inspect()` explica o que é desobedec
 
 - `tests/exemplos.test.js`: coerência das transcrições dos casos reais. `roz.test.js`: importação do `.roz` reproduz
   o caso 2. `solver.test.js`: heurística, travados, verificação, `inspect`. `milp.test.js`: PLI nos casos reais
-  (0 erros, tudo colocado, avisos ≤ 30 no caso 1 e ≤ 33 no caso 2; referências: 21 e 33).
+  (0 erros, tudo colocado, avisos ≤ 30 no caso 1 e ≤ 33 no caso 2; referências: 21 e 33) e modo Restrito (0 avisos).
 - `bash/build.sh` monta o projeto somente-leitura, copia para dentro do container, roda `npm ci` + `npm run build`
   e devolve só `public/` (com o uid do usuário; `public/.gitkeep` é preservado). `SKIP_TESTS=1` pula a suíte.
 - `public/` é saída de build: nunca editar à mão. O build concatena os `js/` na ordem das tags `<script>` do

@@ -41,3 +41,13 @@ test('PLI com dados inviáveis coloca o máximo possível em vez de falhar', asy
   const r = await Milp.solve(d, { complexity: 1, strict: true, seed: 1, timeLimit: 60 });
   assert.ok(r.placements.length >= d.cards.length - 6 && r.placements.length < d.cards.length);
 });
+
+test('PLI no modo restrito: nenhuma condição quebrada; o que não cabe fica fora', async () => {
+  const d = Core.realDoc(2, false);
+  const r = await Milp.solve(d, { complexity: 1, restricted: true, seed: 22, timeLimit: 20 });
+  const s = run(d, { seed: 22, restricted: true, start: r.placements });
+  assert.equal(s.broken, 0);
+  assert.deepEqual(warnings(d).map(w => w.text), []);
+  assert.deepEqual(errors(d).filter(e => !/não colocado/.test(e.text)).map(e => e.text), []);
+  assert.ok(placed(d) >= 120, placed(d) + ' aulas colocadas');
+});

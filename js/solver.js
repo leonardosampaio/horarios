@@ -186,6 +186,10 @@
     }
 
     /* ---- condições "moles": custo e, opcionalmente, mensagens ---- */
+    // stat.broken acumula o tamanho das quebras (aulas além do limite, janelas…): quem chama zera antes.
+    // Com stat.by (um Map), o tamanho também é separado por condição e dia.
+    const stat = { broken: 0, by: null };
+    const brk = (n, kind, a, b) => { stat.broken += n; if (stat.by) { const k = kind + '|' + a + '|' + b; stat.by.set(k, (stat.by.get(k) || 0) + n); } };
     function teacherCost(id, out) {
       const t = T.get(id), occ = occT.get(id);
       const maxGaps = t.maxGaps != null ? t.maxGaps : (P.teacherGaps ? P.maxGaps : null);
@@ -200,16 +204,16 @@
         const gaps = l - f + 1 - cnt;
         gapsTotal += gaps; cost += gaps * W.tgap;
         if (t.maxPerDay != null && cnt > t.maxPerDay) {
-          cost += (cnt - t.maxPerDay) * W.limit;
+          cost += (cnt - t.maxPerDay) * W.limit; brk(cnt - t.maxPerDay, 'dia', d);
           if (out) out.push('Professor ' + t.name + ': ' + cnt + ' aulas em ' + label(d, f).split(',')[0] + ' (máx. ' + t.maxPerDay + ').');
         }
         if (maxCons != null && maxRun > maxCons) {
-          cost += (maxRun - maxCons) * W.limit;
+          cost += (maxRun - maxCons) * W.limit; brk(maxRun - maxCons, 'seguidas', d);
           if (out) out.push('Professor ' + t.name + ': ' + maxRun + ' aulas consecutivas em ' + label(d, f).split(',')[0] + ' (máx. ' + maxCons + ').');
         }
       }
       if (maxGaps != null && gapsTotal > maxGaps) {
-        cost += (gapsTotal - maxGaps) * W.limit;
+        cost += (gapsTotal - maxGaps) * W.limit; brk(gapsTotal - maxGaps, 'janelas');
         if (out) out.push('Professor ' + t.name + ': ' + gapsTotal + ' janelas na semana (máx. ' + maxGaps + ').');
       }
       return cost;
@@ -229,11 +233,12 @@
         counts.push(cnt); total += cnt;
         if (!cnt) continue;
         const gaps = l - f + 1 - cnt;
-        if (gaps) { cost += gaps * W.cgap; if (out) out.push('Turma ' + cls.name + ': ' + gaps + ' janela(s) em ' + label(d, f).split(',')[0] + '.'); }
+        if (gaps) { cost += gaps * W.cgap; brk(gaps, 'janela', d); if (out) out.push('Turma ' + cls.name + ': ' + gaps + ' janela(s) em ' + label(d, f).split(',')[0] + '.'); }
         let ref = 1;
         while (ref < last && off(cls, d, ref) === 2) ref++;
         if (f > ref) {
           cost += (f - ref) * (cls.allowLateStart ? W.lateAllowed : W.late);
+          if (!cls.allowLateStart) brk(f - ref, 'tardio', d);
           if (out && !cls.allowLateStart) out.push('Turma ' + cls.name + ': começa na ' + f + 'ª aula em ' + label(d, f).split(',')[0] + '.');
         }
         if (f === 0) cost += W.zero;
@@ -250,14 +255,14 @@
         if (P.distribution !== false) perKey.forEach((n, k) => {
           const allow = Math.ceil(subjTotal.get(k) / D);
           if (n > allow) {
-            cost += (n - allow) * W.dist;
+            cost += (n - allow) * W.dist; brk(n - allow, 'dist', k, d);
             if (out) out.push('Distribuição: ' + S.get(k.split('|')[1]).name + ' aparece ' + n + ' vezes em ' + label(d, f).split(',')[0] + ' na turma ' + cls.name + '.');
           }
         });
         perSubj.forEach((n, sid) => {
           const s = S.get(sid);
           if (s.maxPerDay != null && n > s.maxPerDay) {
-            cost += (n - s.maxPerDay) * W.limit;
+            cost += (n - s.maxPerDay) * W.limit; brk(n - s.maxPerDay, 'limite', sid, d);
             if (out) out.push('Turma ' + cls.name + ': ' + n + ' aulas de ' + s.name + ' em ' + label(d, f).split(',')[0] + ' (máx. ' + s.maxPerDay + ').');
           }
         });
@@ -266,10 +271,10 @@
           let n = 0, kinds = 0;
           r.subjectIds.forEach(sid => { const v = perSubj.get(sid) || 0; n += v; if (v) kinds++; });
           if (r.type === 'max_per_day' && n > r.max) {
-            cost += (n - r.max) * W.limit;
+            cost += (n - r.max) * W.limit; brk(n - r.max, 'rel', data.relations.indexOf(r), d);
             if (out) out.push('Relação "' + relationText(data, r) + '" quebrada na turma ' + cls.name + ' em ' + label(d, f).split(',')[0] + '.');
           } else if (r.type === 'not_same_day' && kinds > 1) {
-            cost += (kinds - 1) * W.limit;
+            cost += (kinds - 1) * W.limit; brk(kinds - 1, 'rel', data.relations.indexOf(r), d);
             if (out) out.push('Relação "' + relationText(data, r) + '" quebrada na turma ' + cls.name + ' em ' + label(d, f).split(',')[0] + '.');
           }
         }
@@ -291,7 +296,7 @@
       // só é quebra se havia dias suficientes para espalhar (com turma, a regra está em classCost)
       const need = Math.max(0, placed - D);
       if (rep > need && !L.get(id).classIds.length) {
-        cost += (rep - need) * W.dist;
+        cost += (rep - need) * W.dist; brk(rep - need, 'dist');
         if (out) {
           const s = S.get(L.get(id).subjectId);
           out.push('Distribuição: ' + (s ? s.name : 'aula') + ' aparece mais de uma vez no mesmo dia.');
@@ -307,6 +312,7 @@
       if (m.st[m.day * PW + m.period] === 1) c += W.cond * m.dur;
       if (m.room) for (let k = 0; k < m.dur; k++) if (off(m.room, m.day, m.period + k) === 1) c += W.cond;
       if (m.period === 0 && !m.classes.length) c += W.zero;
+      if (c >= W.cond) brk(1, 'cond');
       return c;
     }
 
@@ -326,7 +332,7 @@
 
     return {
       data, D, first, last, PW, NS, genFirst, cards, lessonCards, occT, occC, occR, T, C, S, R, L, off,
-      conflictsFor, inspect, place, unplace, loadAll, writeBack, teacherCost, classCost, lessonCost, cardCost, violations, cardName, clash
+      conflictsFor, inspect, place, unplace, loadAll, writeBack, stat, teacherCost, classCost, lessonCost, cardCost, violations, cardName, clash
     };
   }
 
@@ -450,6 +456,8 @@
   }
 
   /* Gerador: 1) busca construtiva com ejeção de cartões; 2) recozimento simulado nas condições moles.
+     No modo restrito (`restricted`) nenhuma condição pode ficar quebrada: 3) os cartões que ainda quebram alguma
+     voltam para a bandeja e só retornam onde não quebram nada.
      É um generator para a interface poder mostrar progresso e cancelar. */
   function* generate(data, opts) {
     const o = Object.assign({ complexity: 1, strict: true }, opts || {});
@@ -457,11 +465,17 @@
     const rand = rng(P.different === false ? 12345 : (o.seed || (Date.now() & 0x7fffffff)));
     const auto = autoAssignTeachers(data);
     Core.syncCards(data);
-    const M = buildModel(data, { generating: true, strict: o.strict });
+    const M = buildModel(data, { generating: true, strict: o.strict || o.restricted });
     const D = M.D, PW = M.PW, NS = M.NS, first = M.genFirst, last = M.last, cards = M.cards;
 
     cards.forEach(m => { const c = m.ref; if (c.locked && c.day != null) { M.place(m, c.day, c.period, M.R.get(c.roomId) || null); m.locked = true; } });
     const movable = cards.filter(m => !m.locked);
+    // restrito: o que os cartões travados já quebram sozinhos não tem conserto e fica como tolerância de cada um
+    const excess = fn => { const by = M.stat.by = new Map(); fn(); M.stat.by = null; return by; };
+    const ents = o.restricted ? data.teachers.map(t => ({ cost: () => M.teacherCost(t.id), has: m => m.teachers.indexOf(t) >= 0 }))
+      .concat(data.classes.map(c => ({ cost: () => M.classCost(c.id), has: m => m.classes.some(x => x.id === c.id) })))
+      .concat(data.lessons.map(l => ({ cost: () => M.lessonCost(l.id), has: m => m.lesson === l }))) : [];
+    ents.forEach(e => { e.base = excess(e.cost); e.cards = movable.filter(e.has); });
     // ponto de partida opcional (solução do modelo de programação inteira): só entra o que não gera choque
     if (o.start) {
       const byCard = new Map(cards.map(m => [m.id, m]));
@@ -506,7 +520,9 @@
     const restore = snap => { movable.forEach(m => M.unplace(m)); movable.forEach(m => { const s = snap[m.i]; if (s[0] >= 0) M.place(m, s[0], s[1], s[2]); }); };
 
     // ---- fase 1: colocar todos os cartões sem choques ----
-    const max1 = [1, 4, 12][o.complexity - 1] * Math.max(3000, 150 * cards.length);
+    // restrito partindo do modelo de programação inteira: o que ele deixou de fora não cabe sem quebrar condições,
+    // então não se força a entrada com ejeções (a fase 3 ainda tenta encaixar)
+    const max1 = o.restricted && unplaced.length < movable.length / 2 ? 0 : [1, 4, 12][o.complexity - 1] * Math.max(3000, 150 * cards.length);
     // Cartões ejetados vezes demais são deixados de lado (evita que um recurso impossível trave os demais)
     // e ganham novas tentativas depois que o resto estiver colocado.
     const GIVE_UP = 40;
@@ -552,12 +568,15 @@
     if (unplaced.length + parked.length > bestLeft && best) restore(best);
 
     // ---- fase 2: melhorar janelas, distribuição etc. sem criar choques ----
+    // restrito: cada quebra pesa mais que qualquer ganho nas demais condições, então o polimento nunca troca uma pela outra
+    const BROKEN = 1000;
     const costOf = group => {
       const ts = new Set(), cs = new Set(), ls = new Set();
       let s = 0;
       for (const m of group) { m.teachers.forEach(t => ts.add(t.id)); m.classes.forEach(c => cs.add(c.id)); ls.add(m.lesson.id); s += M.cardCost(m); }
+      M.stat.broken = 0;
       ts.forEach(id => { s += M.teacherCost(id); }); cs.forEach(id => { s += M.classCost(id); }); ls.forEach(id => { s += M.lessonCost(id); });
-      return s;
+      return o.restricted ? s + BROKEN * M.stat.broken : s;
     };
     // partindo de uma solução já otimizada, só um polimento "frio" (não desfaz o que o modelo encontrou)
     const max2 = Math.round((o.start ? 0.4 : 1) * [1, 3, 8][o.complexity - 1] * Math.max(20000, 600 * cards.length));
@@ -590,6 +609,53 @@
         group.forEach(x => M.unplace(x));
         group.forEach((x, i) => M.place(x, saved[i][0], saved[i][1], saved[i][2]));
       }
+    }
+
+    // ---- fase 3 (restrito): nenhuma condição quebrada; o que não couber fica na bandeja ----
+    if (o.restricted) {
+      const brokenOf = m => { costOf([m]); return M.stat.broken; };
+      // tira, um a um, o cartão cuja saída mais reduz as quebras de quem ainda passa da tolerância
+      const repair = () => {
+        for (;;) {
+          const cand = new Set();
+          ents.forEach(e => { let over = false; excess(e.cost).forEach((n, k) => { if (n > (e.base.get(k) || 0)) over = true; }); if (over) e.cards.forEach(m => { if (m.day >= 0) cand.add(m); }); });
+          let pick = null, pickDelta = Infinity;
+          cand.forEach(m => {
+            const before = brokenOf(m), pos = [m.day, m.period, m.room];
+            M.unplace(m);
+            const delta = brokenOf(m) - before + rand() * 0.1;
+            M.place(m, pos[0], pos[1], pos[2]);
+            if (delta < pickDelta) { pickDelta = delta; pick = m; }
+          });
+          if (!pick) return;
+          M.unplace(pick);
+          iterations++;
+        }
+      };
+      // devolve à grade o que couber sem choque e sem quebrar nada
+      const fill = () => {
+        let any = false;
+        movable.filter(m => m.day < 0).sort((a, b) => a.domain / a.dur - b.domain / b.dur).forEach(m => {
+          const before = brokenOf(m);
+          let choice = null, choiceCost = Infinity;
+          for (let d = 0; d < D; d++) {
+            for (let p = first; p + m.dur - 1 <= last; p++) {
+              const res = M.conflictsFor(m, d, p);
+              if (!res || res.cards.length) continue;
+              iterations++;
+              M.place(m, d, p, res.room);
+              const cost = costOf([m]);
+              if (M.stat.broken <= before && cost < choiceCost) { choiceCost = cost; choice = { d: d, p: p, room: res.room }; }
+              M.unplace(m);
+            }
+          }
+          if (choice) { M.place(m, choice.d, choice.p, choice.room); any = true; }
+        });
+        return any;
+      };
+      yield { phase: 3, progress: 1, iterations: iterations };
+      for (let round = 0; round < 4; round++) { repair(); if (!fill()) break; }
+      repair();
     }
 
     M.writeBack();
